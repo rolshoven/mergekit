@@ -15,6 +15,7 @@
 
 import logging
 import os
+import re
 import time
 from typing import List, Optional
 
@@ -278,6 +279,9 @@ def main(
         print(f"Received {len(x)} genotypes")
         res = strat.evaluate_genotypes(x)
 
+        # Remove suffixes such as -1, -2, etc. from task names
+        _remove_suffixes_from_task_name(res)
+
         if use_wandb:
             res = list(res)
             score_mean = np.mean([r["score"] for r in res])
@@ -389,6 +393,21 @@ def _reshard_model(
         logging.warning(f"Could not save tokenizer for {model.model}", exc_info=e)
 
     return ModelReference(model=out_path)
+
+
+def _remove_suffixes_from_task_name(evals: dict):
+    for idx in range(len(evals)):
+        task_name_mappings = {}
+        for task_name in evals[idx]["results"]:
+            matches = re.findall("(.*)-\d+", task_name)
+            if matches:
+                truncated_task_name = matches[0]
+                assert (
+                    truncated_task_name not in evals[idx]["results"]
+                ), "Truncated task name is already contained in this result entry"
+                task_name_mappings[task_name] = truncated_task_name
+        for old_name, new_name in task_name_mappings.items():
+            evals[idx]["results"][new_name] = evals[idx]["results"].pop(old_name)
 
 
 if __name__ == "__main__":
